@@ -4,13 +4,13 @@ import { getDb } from "@/db";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { StatusDistributionChart, TrendChart } from "@/components/dashboard/charts";
+import { StatusDistributionChart, TrendChart } from "@/components/dashboard/charts-lazy";
 import { SampleDataBanner } from "@/components/dashboard/sample-banner";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EVENT_LABELS } from "@/lib/constants";
-import { getConnection } from "@/lib/gmail/connection";
+import { getShellData } from "@/lib/queries/shell";
 import { EMPTY_NEW, getLastFinishedRun, getLatestSummary, getNewCounts, getRecentActivity, getStatusDistribution, getTotals, getTrend, hasSampleData } from "@/lib/queries/stats";
 import { requireUser } from "@/lib/session";
 import { SampleBadge } from "@/components/status-badge";
@@ -21,19 +21,21 @@ export const metadata = { title: "Overview" };
 export default async function OverviewPage() {
   const user = await requireUser();
   const db = getDb();
-  const lastRun = await getLastFinishedRun(db, user.id);
-  const [totals, newCounts, distribution, trend, activity, summary, sample, conn] = await Promise.all([
+  const lastRunP = getLastFinishedRun(db, user.id);
+  const [lastRun, totals, newCounts, distribution, trend, activity, summary, sample, shell] = await Promise.all([
+    lastRunP,
     getTotals(db, user.id),
-    lastRun ? getNewCounts(db, user.id, lastRun.id) : Promise.resolve(EMPTY_NEW),
+    lastRunP.then((run) => (run ? getNewCounts(db, user.id, run.id) : EMPTY_NEW)),
     getStatusDistribution(db, user.id),
     getTrend(db, user.id, 12),
     getRecentActivity(db, user.id, 8),
     getLatestSummary(db, user.id),
     hasSampleData(db, user.id),
-    getConnection(db, user.id),
+    getShellData(db, user.id),
   ]);
 
-  const connected = conn?.status === "connected";
+  const conn = shell.connection;
+  const connected = conn.status === "connected";
   const empty = totals.applications === 0 && totals.jobAlerts === 0;
 
   return (
@@ -47,11 +49,11 @@ export default async function OverviewPage() {
             <div className="flex items-center gap-3">
               <Cloud className="size-6 text-indigo-600" aria-hidden />
               <div>
-                <p className="font-semibold">{conn?.status === "needs_reauth" ? "Gmail authorization expired" : "Connect Gmail to start tracking"}</p>
+                <p className="font-semibold">{conn.status === "needs_reauth" ? "Gmail authorization expired" : "Connect Gmail to start tracking"}</p>
                 <p className="text-sm text-muted-foreground">Read-only access. Nothing is ever sent, changed or deleted in your mailbox.</p>
               </div>
             </div>
-            <Button asChild><Link href="/settings">{conn?.status === "needs_reauth" ? "Reconnect Gmail" : "Connect Gmail"}</Link></Button>
+            <Button asChild><Link href="/settings">{conn.status === "needs_reauth" ? "Reconnect Gmail" : "Connect Gmail"}</Link></Button>
           </CardContent>
         </Card>
       )}

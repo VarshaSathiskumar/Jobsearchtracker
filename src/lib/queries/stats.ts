@@ -17,7 +17,8 @@ export type Totals = {
 
 /** All dashboard numbers come from SQL aggregates. No LLM is involved. */
 export async function getTotals(db: Db, userId: string): Promise<Totals> {
-  const [a] = await db
+  const [[a], [j], [r], [o]] = await Promise.all([
+    db
     .select({
       total: sql<number>`count(*)`,
       rejected: sql<number>`count(*) filter (where ${applications.status} = 'rejected')`,
@@ -26,19 +27,20 @@ export async function getTotals(db: Db, userId: string): Promise<Totals> {
       offers: sql<number>`count(*) filter (where ${applications.status} = 'offer')`,
     })
     .from(applications)
-    .where(eq(applications.userId, userId));
-  const [j] = await db
-    .select({ c: sql<number>`count(distinct coalesce(${jobAlerts.gmailMessageId}::text, ${jobAlerts.id}::text))` })
-    .from(jobAlerts)
-    .where(eq(jobAlerts.userId, userId));
-  const [r] = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(reviewItems)
-    .where(and(eq(reviewItems.userId, userId), eq(reviewItems.status, "open")));
-  const [o] = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(gmailMessages)
-    .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.classification, "other_career"), eq(gmailMessages.processingStatus, "processed")));
+    .where(eq(applications.userId, userId)),
+    db
+      .select({ c: sql<number>`count(distinct coalesce(${jobAlerts.gmailMessageId}::text, ${jobAlerts.id}::text))` })
+      .from(jobAlerts)
+      .where(eq(jobAlerts.userId, userId)),
+    db
+      .select({ c: sql<number>`count(*)` })
+      .from(reviewItems)
+      .where(and(eq(reviewItems.userId, userId), eq(reviewItems.status, "open"))),
+    db
+      .select({ c: sql<number>`count(*)` })
+      .from(gmailMessages)
+      .where(and(eq(gmailMessages.userId, userId), eq(gmailMessages.classification, "other_career"), eq(gmailMessages.processingStatus, "processed"))),
+  ]);
   return {
     applications: n(a.total),
     rejections: n(a.rejected),
@@ -65,7 +67,8 @@ export const EMPTY_NEW: NewCounts = { applications: 0, rejections: 0, callbacks:
 
 /** Items first detected during one sync run, counted from the records tagged with that run. */
 export async function getNewCounts(db: Db, userId: string, runId: string): Promise<NewCounts> {
-  const [ev] = await db
+  const [[ev], [ap], [al], [rv]] = await Promise.all([
+    db
     .select({
       rejections: sql<number>`count(distinct ${applicationEvents.id}) filter (where ${applicationEvents.eventType} = 'rejected')`,
       callbacks: sql<number>`count(distinct ${applicationEvents.id}) filter (where ${applicationEvents.eventType} in ('callback','assessment'))`,
@@ -73,19 +76,20 @@ export async function getNewCounts(db: Db, userId: string, runId: string): Promi
       offers: sql<number>`count(distinct ${applicationEvents.id}) filter (where ${applicationEvents.eventType} = 'offer')`,
     })
     .from(applicationEvents)
-    .where(and(eq(applicationEvents.userId, userId), eq(applicationEvents.syncRunId, runId)));
-  const [ap] = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(applications)
-    .where(and(eq(applications.userId, userId), eq(applications.syncRunId, runId)));
-  const [al] = await db
-    .select({ c: sql<number>`count(distinct coalesce(${jobAlerts.gmailMessageId}::text, ${jobAlerts.id}::text))` })
-    .from(jobAlerts)
-    .where(and(eq(jobAlerts.userId, userId), eq(jobAlerts.syncRunId, runId)));
-  const [rv] = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(reviewItems)
-    .where(and(eq(reviewItems.userId, userId), eq(reviewItems.syncRunId, runId)));
+    .where(and(eq(applicationEvents.userId, userId), eq(applicationEvents.syncRunId, runId))),
+    db
+      .select({ c: sql<number>`count(*)` })
+      .from(applications)
+      .where(and(eq(applications.userId, userId), eq(applications.syncRunId, runId))),
+    db
+      .select({ c: sql<number>`count(distinct coalesce(${jobAlerts.gmailMessageId}::text, ${jobAlerts.id}::text))` })
+      .from(jobAlerts)
+      .where(and(eq(jobAlerts.userId, userId), eq(jobAlerts.syncRunId, runId))),
+    db
+      .select({ c: sql<number>`count(*)` })
+      .from(reviewItems)
+      .where(and(eq(reviewItems.userId, userId), eq(reviewItems.syncRunId, runId))),
+  ]);
   return {
     applications: n(ap.c),
     rejections: n(ev.rejections),
@@ -111,12 +115,13 @@ export async function getTrend(db: Db, userId: string, weeks = 12) {
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - weeks * 7);
-  const apps = await db
+  const [apps, evs] = await Promise.all([
+    db
     .select({ week: sql<string>`to_char(date_trunc('week', ${applications.appliedAt}), 'YYYY-MM-DD')`, c: sql<number>`count(*)` })
     .from(applications)
     .where(and(eq(applications.userId, userId), gte(applications.appliedAt, since)))
-    .groupBy(sql`1`);
-  const evs = await db
+    .groupBy(sql`1`),
+    db
     .select({
       week: sql<string>`to_char(date_trunc('week', ${applicationEvents.occurredAt}), 'YYYY-MM-DD')`,
       type: applicationEvents.eventType,
@@ -124,7 +129,8 @@ export async function getTrend(db: Db, userId: string, weeks = 12) {
     })
     .from(applicationEvents)
     .where(and(eq(applicationEvents.userId, userId), gte(applicationEvents.occurredAt, since), inArray(applicationEvents.eventType, ["rejected", "callback", "assessment", "interview_scheduled", "interview_rescheduled", "offer"])))
-    .groupBy(sql`1`, applicationEvents.eventType);
+    .groupBy(sql`1`, applicationEvents.eventType),
+  ]);
 
   const monday = (d: Date) => {
     const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
