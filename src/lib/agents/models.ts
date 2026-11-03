@@ -1,6 +1,6 @@
-import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatOpenAI } from "@langchain/openai";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { anthropicEnv } from "@/env";
+import { openaiEnv } from "@/env";
 
 export type AgentModels = {
   /** Orchestration and tool routing. */
@@ -14,15 +14,15 @@ export type AgentModels = {
 };
 
 export function createModels(): AgentModels {
-  const env = anthropicEnv();
+  const env = openaiEnv();
   const make = (model: string, maxTokens: number) =>
-    new ChatAnthropic({ apiKey: env.ANTHROPIC_API_KEY, model, maxTokens, maxRetries: 3 });
-  const summaryName = env.ANTHROPIC_MODEL_SUMMARY || env.ANTHROPIC_MODEL_FAST;
+    new ChatOpenAI({ apiKey: env.OPENAI_API_KEY, model, maxTokens, maxRetries: 3 });
+  const summaryName = env.OPENAI_MODEL_SUMMARY || env.OPENAI_MODEL_FAST;
   return {
-    supervisor: make(env.ANTHROPIC_MODEL_SUPERVISOR, 1024),
-    fast: make(env.ANTHROPIC_MODEL_FAST, 1024),
+    supervisor: make(env.OPENAI_MODEL_SUPERVISOR, 1024),
+    fast: make(env.OPENAI_MODEL_FAST, 1024),
     summary: make(summaryName, 1024),
-    names: { supervisor: env.ANTHROPIC_MODEL_SUPERVISOR, fast: env.ANTHROPIC_MODEL_FAST, summary: summaryName },
+    names: { supervisor: env.OPENAI_MODEL_SUPERVISOR, fast: env.OPENAI_MODEL_FAST, summary: summaryName },
   };
 }
 

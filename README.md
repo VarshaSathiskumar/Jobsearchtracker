@@ -8,7 +8,7 @@ rejections, callbacks, interviews and job alerts. A **Refresh Now** button runs 
 - Auth.js (Google sign-in, single-email allowlist enforced server-side)
 - Gmail API over OAuth 2.0 with the `gmail.readonly` scope only, offline access
 - Supabase Postgres via Drizzle ORM (migrations included)
-- LangChain JS (`langchain` v1 `createAgent`, `@langchain/anthropic`): supervisor agent with specialist subagents as tools
+- LangChain JS (`langchain` v1 `createAgent`, `@langchain/openai`): supervisor agent with specialist subagents as tools
 - Vercel Workflow SDK for durable, chunked, resumable sync execution
 - Zod for every structured LLM output
 - Vitest unit and integration tests (real Postgres engine via PGlite, real LangChain agent wiring)
@@ -26,12 +26,12 @@ against fakes, and needs you to supply real accounts before it works end to end:
 |---|---|---|
 | Google Cloud OAuth client | Client ID and secret, consent screen, Gmail API enabled | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | Supabase project | Pooled and direct Postgres URLs | `DATABASE_URL`, `DIRECT_DATABASE_URL` |
-| Anthropic | API key | `ANTHROPIC_API_KEY` |
+| OpenAI | API key | `OPENAI_API_KEY` |
 | Vercel | A project (Workflow runs on Vercel's managed world in production) | Vercel dashboard |
 
 Verified without credentials: unit tests, integration tests (sync pipeline, agents, API authorization),
 `next build`, lint, type check, and a local run of the UI against a local database with a hand-made session.
-Not verified: a live Gmail fetch, a live Anthropic call, Vercel deployment.
+Not verified: a live Gmail fetch, a live OpenAI call, Vercel deployment.
 
 ---
 
@@ -86,9 +86,9 @@ Then sign in, open Settings and use **Load sample data** to explore the UI. Samp
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | One OAuth client serves sign-in and the Gmail connection. |
 | `DATABASE_URL` | yes | Supabase **pooled** URL (transaction mode, port 6543). |
 | `DIRECT_DATABASE_URL` | for migrations | Supabase direct URL (port 5432). |
-| `ANTHROPIC_API_KEY` | yes for agents | Without it syncs still ingest mail, but the agent step fails and mail stays pending. |
-| `ANTHROPIC_MODEL_SUPERVISOR` | no | Default `claude-sonnet-5-5`. |
-| `ANTHROPIC_MODEL_FAST` | no | Default `claude-haiku-5-5`. Used for classification and extraction. |
+| `OPENAI_API_KEY` | yes for agents | Without it syncs still ingest mail, but the agent step fails and mail stays pending. |
+| `OPENAI_MODEL_SUPERVISOR` | no | Default `gpt-4.1`. |
+| `OPENAI_MODEL_FAST` | no | Default `gpt-4.1-mini`. Used for classification and extraction. |
 | `SYNC_LIST_PAGE_SIZE`, `GMAIL_CONCURRENCY`, `AGENT_BATCH_SIZE`, `AGENT_BATCHES_PER_STEP`, `SYNC_STALE_LOCK_MINUTES`, `MAX_MESSAGE_ATTEMPTS`, `DB_POOL_MAX` | no | Tuning, see `src/env.ts`. |
 
 ---
@@ -225,7 +225,7 @@ Safety properties, each covered by tests:
 - **A rejection for one role cannot reject another role at the same company.** The matcher uses job id, email thread and title. A company-only match is allowed only when the company has exactly one application and the email does not contradict its title. Otherwise the email goes to **Needs Review**. An LLM proposal is accepted only if it is one of the code-supplied candidates, is at the same company, has at least 0.8 confidence **and** has corroborating evidence.
 - **Status history is complete and order independent.** Status is derived from all events sorted by time, with forward-only transitions, terminal rejection/withdrawal (reopened only by a later confident offer or interview) and manual edits that always win. Callbacks and scheduled interviews are separate statuses.
 - **Emails are untrusted data.** They are wrapped in delimiters the email cannot close, the supervisor never sees email text, tool results are data, and tools are bound to message ids the code owns. Job-alert URLs the model invents are dropped.
-- **Provider outages do not poison data.** Anthropic HTTP/network errors abort the step (it is retried) and do not count as message failures or create review items. Only content failures consume `MAX_MESSAGE_ATTEMPTS`.
+- **Provider outages do not poison data.** OpenAI HTTP/network errors abort the step (it is retried) and do not count as message failures or create review items. Only content failures consume `MAX_MESSAGE_ATTEMPTS`.
 - **Numbers are never LLM generated.** The digest is rejected in favour of a deterministic template if it cites a number the database did not produce.
 
 Dashboard cards are SQL aggregates (`src/lib/queries/stats.ts`). "New since last sync" counts records tagged with the most recent completed run.
@@ -243,9 +243,9 @@ Dashboard cards are SQL aggregates (`src/lib/queries/stats.ts`). "New since last
 
 ## Costs and limitations
 
-I could not price these reliably offline, so check the current pricing pages: Anthropic, Vercel and Supabase.
+I could not price these reliably offline, so check the current pricing pages: OpenAI, Vercel and Supabase.
 
-- **Anthropic**: cost scales with the number of *relevant* emails. The prefilter and Gmail query drop most mail before any model call. A relevant email costs roughly one classification call plus one extraction call on the fast model, plus a small share of a supervisor turn on the supervisor model. Large first backfills are the main cost. Use a short date range first, and set `ANTHROPIC_MODEL_SUPERVISOR` to a cheaper model if you want to trade accuracy for cost.
+- **OpenAI**: cost scales with the number of *relevant* emails. The prefilter and Gmail query drop most mail before any model call. A relevant email costs roughly one classification call plus one extraction call on the fast model, plus a small share of a supervisor turn on the supervisor model. Large first backfills are the main cost. Use a short date range first, and set `OPENAI_MODEL_SUPERVISOR` to a cheaper model if you want to trade accuracy for cost.
 - **Vercel**: Workflow SDK, function execution time and Fluid compute are usage-priced and subject to plan limits. Hobby plans are limited to non-commercial use and have lower limits.
 - **Supabase**: free projects can pause after a period of inactivity and have connection and storage limits. Use the pooled URL from Vercel.
 - **Gmail API**: 250 quota units per user per second. `messages.get` costs 5 units, so the default concurrency of 5 stays well below it.

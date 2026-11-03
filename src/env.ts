@@ -51,18 +51,18 @@ export function allowedEmail(): string {
   return v;
 }
 
-export function anthropicEnv() {
+export function openaiEnv() {
   return parse(
     z.object({
-      ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
-      ANTHROPIC_MODEL_SUPERVISOR: z.string().default("claude-sonnet-5-5"),
-      ANTHROPIC_MODEL_FAST: z.string().default("claude-haiku-5-5"),
-      ANTHROPIC_MODEL_SUMMARY: z.string().optional(),
+      OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
+      OPENAI_MODEL_SUPERVISOR: z.string().default("gpt-4.1"),
+      OPENAI_MODEL_FAST: z.string().default("gpt-4.1-mini"),
+      OPENAI_MODEL_SUMMARY: z.string().optional(),
     }),
     {
       ...process.env,
-      ANTHROPIC_MODEL_SUPERVISOR: process.env.ANTHROPIC_MODEL_SUPERVISOR || undefined,
-      ANTHROPIC_MODEL_FAST: process.env.ANTHROPIC_MODEL_FAST || undefined,
+      OPENAI_MODEL_SUPERVISOR: process.env.OPENAI_MODEL_SUPERVISOR || undefined,
+      OPENAI_MODEL_FAST: process.env.OPENAI_MODEL_FAST || undefined,
     },
   );
 }
